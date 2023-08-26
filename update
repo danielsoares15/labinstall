@@ -1,0 +1,20 @@
+#!/bin/dash
+apt-get update && apt-get upgrade && apt install openssh-server geany build-essential autoconf automake libxmu-dev xorg-dev gcc g++ openjdk-8-jdk openjdk-19-jre proftpd isc-dhcp-server dibbler-server dibbler-client subnetcalc nmap wireshark virtualbox-dkms virtualbox-guest-utils geany && apt-get clean && apt-get autoclean && apt-get remove && apt-get autoremove &&  && apt-get install net-tools && ifconfig
+#Start off Services on Boot
+sudo systemctl disable teamviewerd.service
+sudo systemctl disable nmbd.service
+sudo systemctl disable blueman-mechanism.service
+sudo systemctl disable apache2.service
+sudo systemctl disable proftpd.service
+sudo systemctl disable snmpd.service
+sudo systemctl disable ModemManager.service
+sudo systemctl disable teamviewerd.service
+sudo systemctl disable cups.service
+sudo systemctl disable bluetooth.service
+sudo systemctl disable haproxy.service
+sudo systemctl disable ssh.service
+sudo systemctl disable smbd.service
+sudo systemctl disable winbind.service
+sudo systemctl disable openvpn.service
+sudo systemctl disable ufw.service
+

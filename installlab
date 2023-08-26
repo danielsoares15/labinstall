@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Este script deve ser executado como superusuário (root)
+if [ "$EUID" -ne 0 ]; then
+    echo "Por favor, execute este script como root"
+    exit
+fi
+
+# Atualizações do sistema
+apt-get update
+apt-get upgrade -y
+
+# Instalação do Git
+apt-get install git -y
+
+# Clona o repositório
+git clone https://github.com/danielsoares15/labinstall.git
+
+# Atribui permissões ao diretório
+chmod -R 777 labinstall
+
+# Entra no diretório clonado
+cd labinstall
+
+# Executa o script de atualização (se existir)
+if [ -f "./update" ]; then
+    chmod +x update
+    ./update
+fi
