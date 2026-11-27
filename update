@@ -1,20 +1,209 @@
-#!/bin/dash
-apt-get update && apt-get upgrade && apt install openssh-server geany build-essential autoconf automake libxmu-dev xorg-dev gcc g++ openjdk-8-jdk openjdk-19-jre proftpd isc-dhcp-server dibbler-server dibbler-client subnetcalc nmap wireshark virtualbox-dkms virtualbox-guest-utils geany && apt-get clean && apt-get autoclean && apt-get remove && apt-get autoremove &&  && apt-get install net-tools && ifconfig
-#Start off Services on Boot
-sudo systemctl disable teamviewerd.service
-sudo systemctl disable nmbd.service
-sudo systemctl disable blueman-mechanism.service
-sudo systemctl disable apache2.service
-sudo systemctl disable proftpd.service
-sudo systemctl disable snmpd.service
-sudo systemctl disable ModemManager.service
-sudo systemctl disable teamviewerd.service
-sudo systemctl disable cups.service
-sudo systemctl disable bluetooth.service
-sudo systemctl disable haproxy.service
-sudo systemctl disable ssh.service
-sudo systemctl disable smbd.service
-sudo systemctl disable winbind.service
-sudo systemctl disable openvpn.service
-sudo systemctl disable ufw.service
+#!/bin/bash
+# ==============================================================================
+# Script: update
+# Descrição: Atualiza o sistema Debian, instala dependências e ferramentas de laboratório,
+#            baixa o repositório dioxfile/ns-2.34-allinone (NS-2 com protocolo OLSR),
+#            extrai e compila/instala automaticamente o NS-2 allinone, configurando
+#            as variáveis de ambiente no sistema.
+# ==============================================================================
 
+set -e
+
+# Garante execução como root
+if [ "$EUID" -ne 0 ]; then
+    echo "[-] Erro: Este script precisa ser executado como root (sudo su)."
+    exit 1
+fi
+
+echo "======================================================================"
+echo "    INICIANDO INSTALAÇÃO DO LABORATÓRIO E NS-2.34 ALLINONE (DEBIAN)   "
+echo "======================================================================"
+
+# 1. Atualização do Sistema
+echo "[1/6] Atualizando índices de pacotes e o sistema operacional..."
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get upgrade -y
+
+# 2. Instalação das dependências essenciais do NS-2 e utilitários
+echo "[2/6] Instalando dependências essenciais para compilação do NS-2..."
+ESSENTIAL_PKGS=(
+    build-essential
+    autoconf
+    automake
+    libtool
+    gcc
+    g++
+    make
+    patch
+    libxmu-dev
+    libxmu-headers
+    xorg-dev
+    libx11-dev
+    libxt-dev
+    libxext-dev
+    unzip
+    zip
+    tar
+    gzip
+    git
+    curl
+    wget
+    net-tools
+)
+
+apt-get install -y "${ESSENTIAL_PKGS[@]}"
+
+echo "[*] Instalando ferramentas adicionais de rede e laboratório..."
+OPTIONAL_PKGS=(
+    openssh-server
+    geany
+    nmap
+    wireshark
+    tshark
+    subnetcalc
+    default-jdk
+    default-jre
+    xgraph
+)
+
+for pkg in "${OPTIONAL_PKGS[@]}"; do
+    apt-get install -y "$pkg" 2>/dev/null || echo "[!] Pacote opcional '$pkg' indisponível nesta versão do Debian, prosseguindo..."
+done
+
+# Limpeza de pacotes
+apt-get clean
+apt-get autoclean -y
+apt-get autoremove -y
+
+# 3. Desativação de serviços desnecessários em ambiente de laboratório/VM
+echo "[3/6] Otimizando serviços em segundo plano..."
+SERVICES_TO_DISABLE=(
+    teamviewerd.service
+    nmbd.service
+    blueman-mechanism.service
+    apache2.service
+    proftpd.service
+    snmpd.service
+    ModemManager.service
+    cups.service
+    bluetooth.service
+    haproxy.service
+    ssh.service
+    smbd.service
+    winbind.service
+    openvpn.service
+    ufw.service
+)
+
+for srv in "${SERVICES_TO_DISABLE[@]}"; do
+    systemctl disable --now "$srv" 2>/dev/null || true
+done
+
+# 4. Download do NS-2 (dioxfile/ns-2.34-allinone com suporte a OLSR)
+INSTALL_DIR="/opt/ns-2.34-allinone"
+echo "[4/6] Baixando dioxfile/ns-2.34-allinone..."
+
+if [ -d "$INSTALL_DIR" ]; then
+    echo "[*] Diretório $INSTALL_DIR já existe. Atualizando repositório..."
+    cd "$INSTALL_DIR"
+    git fetch origin
+    git reset --hard origin/main || git reset --hard origin/master || true
+else
+    git clone https://github.com/dioxfile/ns-2.34-allinone.git "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+fi
+
+# 5. Extração e Instalação do ns-allinone-2.34
+echo "[5/6] Extraindo e compilando ns-allinone-2.34..."
+if [ -f "$INSTALL_DIR/ns-allinone-2.34.zip" ]; then
+    unzip -q -o "$INSTALL_DIR/ns-allinone-2.34.zip" -d "$INSTALL_DIR"
+elif [ ! -d "$INSTALL_DIR/ns-allinone-2.34" ]; then
+    echo "[-] Erro: Arquivo ns-allinone-2.34.zip não encontrado em $INSTALL_DIR!"
+    exit 1
+fi
+
+NS_ROOT="$INSTALL_DIR/ns-allinone-2.34"
+if [ ! -d "$NS_ROOT" ]; then
+    echo "[-] Erro: Pasta $NS_ROOT não encontrada após extração."
+    exit 1
+fi
+
+# Concede permissão de execução
+chmod -R 755 "$INSTALL_DIR"
+chmod +x "$NS_ROOT/install"
+
+echo "[*] Executando o script de compilação e instalação (./install)..."
+cd "$NS_ROOT"
+./install
+
+# 6. Configuração das Variáveis de Ambiente do NS-2
+echo "[6/6] Configurando variáveis de ambiente (PATH, LD_LIBRARY_PATH, TCL_LIBRARY)..."
+
+# Identifica diretórios reais de otcl e nam
+OTCL_DIR=$(find "$NS_ROOT" -maxdepth 1 -type d -name "otcl-*" | head -n 1)
+[ -z "$OTCL_DIR" ] && OTCL_DIR="$NS_ROOT/otcl-1.13"
+
+NAM_DIR=$(find "$NS_ROOT" -maxdepth 1 -type d -name "nam-*" | head -n 1)
+[ -z "$NAM_DIR" ] && NAM_DIR="$NS_ROOT/nam-1.14"
+
+TCL_VER_DIR="$NS_ROOT/tcl8.4.18"
+TK_VER_DIR="$NS_ROOT/tk8.4.18"
+NS_BIN_DIR="$NS_ROOT/ns-2.34"
+
+# Cria arquivo em /etc/profile.d/ns2.sh para que todos os usuários tenham acesso
+PROFILE_FILE="/etc/profile.d/ns2.sh"
+cat << EOF > "$PROFILE_FILE"
+# Configuração de variáveis de ambiente para NS-2.34 com OLSR
+export NS_HOME="$NS_ROOT"
+export PATH="\$PATH:$NS_ROOT/bin:$TCL_VER_DIR/unix:$TK_VER_DIR/unix:$NS_BIN_DIR:$NAM_DIR"
+export LD_LIBRARY_PATH="\$LD_LIBRARY_PATH:$OTCL_DIR:$NS_ROOT/lib:/usr/X11R6/lib:/usr/local/lib"
+export TCL_LIBRARY="\$TCL_LIBRARY:$TCL_VER_DIR/library:/usr/lib"
+EOF
+
+chmod 644 "$PROFILE_FILE"
+
+# Cria links simbólicos em /usr/local/bin para acesso imediato sem necessidade de reabrir o terminal
+[ -f "$NS_BIN_DIR/ns" ] && ln -sf "$NS_BIN_DIR/ns" /usr/local/bin/ns
+[ -f "$NAM_DIR/nam" ] && ln -sf "$NAM_DIR/nam" /usr/local/bin/nam
+[ -f "$NS_ROOT/bin/ns" ] && ln -sf "$NS_ROOT/bin/ns" /usr/local/bin/ns
+[ -f "$NS_ROOT/bin/nam" ] && ln -sf "$NS_ROOT/bin/nam" /usr/local/bin/nam
+
+# Adiciona aos arquivos .bashrc existentes (root e usuários comuns em /home)
+BASHRC_SNIPPET="
+# >>> NS-2.34 Environment Setup >>>
+if [ -f $PROFILE_FILE ]; then
+    source $PROFILE_FILE
+fi
+# <<< NS-2.34 Environment Setup <<<
+"
+
+for bashrc in /root/.bashrc /home/*/.bashrc; do
+    if [ -f "$bashrc" ]; then
+        if ! grep -q "NS-2.34 Environment Setup" "$bashrc"; then
+            echo "$BASHRC_SNIPPET" >> "$bashrc"
+        fi
+    fi
+done
+
+# Permite acesso geral aos arquivos instalados
+chmod -R 777 "$INSTALL_DIR"
+
+echo "======================================================================"
+echo "    INSTALAÇÃO DO NS-2.34 CONCLUÍDA COM SUCESSO!                      "
+echo "======================================================================"
+echo ""
+echo "O NS-2 foi instalado em: $NS_ROOT"
+echo "Links criados em: /usr/local/bin/ns e /usr/local/bin/nam"
+echo "Configuração global salva em: $PROFILE_FILE"
+echo ""
+echo "Para carregar as variáveis na sessão atual imediatamente, execute:"
+echo "    source /etc/profile.d/ns2.sh"
+echo ""
+echo "Para testar o simulador com os arquivos de teste do repositório:"
+echo "    cd $INSTALL_DIR"
+echo "    ns normalEnviroment_CBR.tcl"
+echo ""
+echo "Para verificar a versão do NS-2:"
+echo "    ns -v   (ou digite 'ns' para abrir o console interativo '%')"
+echo "======================================================================"

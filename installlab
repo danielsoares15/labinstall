@@ -1,29 +1,41 @@
 #!/bin/bash
+# ==============================================================================
+# Script: installlab
+# Descrição: Bootstrap para inicialização da instalação no Debian.
+#            Verifica privilégios de root e executa o script 'update'.
+# ==============================================================================
 
-# Este script deve ser executado como superusuário (root)
+set -e
+
+# Verifica se está sendo executado como root
 if [ "$EUID" -ne 0 ]; then
-    echo "Por favor, execute este script como root"
-    exit
+    echo "======================================================================"
+    echo " ERRO: Este script deve ser executado como superusuário (root)!"
+    echo " Por favor, execute primeiro: sudo su"
+    echo " e em seguida execute: ./installlab"
+    echo "======================================================================"
+    exit 1
 fi
 
-# Atualizações do sistema
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Se o script 'update' já estiver presente no diretório atual, executa diretamente
+if [ -f "$SCRIPT_DIR/update" ]; then
+    echo "[*] Script update encontrado localmente. Iniciando..."
+    chmod +x "$SCRIPT_DIR/update"
+    exec "$SCRIPT_DIR/update" "$@"
+fi
+
+# Caso o script tenha sido executado de forma avulsa (ex: via curl | bash)
+echo "[*] Atualizando listas de pacotes e instalando dependências básicas..."
 apt-get update
-apt-get upgrade -y
+apt-get install -y git
 
-# Instalação do Git
-apt-get install git -y
-
-# Clona o repositório
-git clone https://github.com/danielsoares15/labinstall.git
-
-# Atribui permissões ao diretório
-chmod -R 777 labinstall
-
-# Entra no diretório clonado
-cd labinstall
-
-# Executa o script de atualização (se existir)
-if [ -f "./update" ]; then
-    chmod +x update
-    ./update
+TARGET_DIR="/opt/labinstall"
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "[*] Clonando repositório labinstall em $TARGET_DIR..."
+    git clone https://github.com/danielsoares15/labinstall.git "$TARGET_DIR"
 fi
+
+chmod +x "$TARGET_DIR/update"
+exec "$TARGET_DIR/update" "$@"

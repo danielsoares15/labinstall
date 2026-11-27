@@ -1,0 +1,6 @@
+# Força quebra de linha UNIX (LF) para scripts shell e markdown
+* text=auto eol=lf
+installlab text eol=lf
+update text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
